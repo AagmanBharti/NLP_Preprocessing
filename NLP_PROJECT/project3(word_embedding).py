@@ -12,14 +12,33 @@ from nltk.stem import PorterStemmer, LancasterStemmer
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from gensim.models import Word2Vec
+from spacy.cli import download
 
-# NLTK DOWNLOAD
-nltk.download('punkt')
+# =========================
+# SAFE NLTK DOWNLOAD
+# =========================
+@st.cache_resource
+def load_nltk():
+    nltk.download("punkt")
 
-# LOAD SPACY MODEL
-nlp = spacy.load("en_core_web_sm")
+load_nltk()
 
-# REGEX PREPROCESSING FUNCTION 
+# =========================
+# SAFE SPACY MODEL LOAD
+# =========================
+@st.cache_resource
+def load_spacy_model():
+    try:
+        return spacy.load("en_core_web_sm")
+    except:
+        download("en_core_web_sm")
+        return spacy.load("en_core_web_sm")
+
+nlp = load_spacy_model()
+
+# =========================
+# REGEX PREPROCESSING
+# =========================
 def regex_preprocess(text):
     text = text.lower()
 
@@ -29,7 +48,7 @@ def regex_preprocess(text):
     # Remove emails
     text = re.sub(r'\S+@\S+', ' ', text)
 
-    # Remove emojis and special characters
+    # Remove emojis & special characters
     text = re.sub(r'[^\w\s]', ' ', text)
 
     # Remove punctuation
@@ -38,24 +57,30 @@ def regex_preprocess(text):
     # Remove numbers
     text = re.sub(r'\d+', ' ', text)
 
-    # Extract only alphabetic words
+    # Extract only alphabetic tokens
     tokens = re.findall(r'\b[a-z]+\b', text)
 
     return tokens
 
-# STREAMLIT CONFIGURATION-
+# =========================
+# STREAMLIT CONFIG
+# =========================
 st.set_page_config(page_title="NLP Preprocessing", layout="wide")
 st.title("NLP Text Preprocessing Application")
 st.write("Tokenization, Cleaning, Stemming, Lemmatization, BoW, TF-IDF, Word Embeddings")
 
-#  USER INPUT
+# =========================
+# USER INPUT
+# =========================
 text = st.text_area(
     "Enter Text for NLP Processing",
     height=150,
     placeholder="Example: Contact me at hello@gmail.com. Visit https://nlp.ai"
 )
 
-#  SIDEBAR 
+# =========================
+# SIDEBAR
+# =========================
 option = st.sidebar.radio(
     "Select NLP Technique",
     [
@@ -69,13 +94,15 @@ option = st.sidebar.radio(
     ]
 )
 
-# PROCESS BUTTON 
+# =========================
+# PROCESS BUTTON
+# =========================
 if st.button("Process Text"):
 
     if text.strip() == "":
         st.warning("Please enter some text.")
 
-    # TOKENIZATION 
+    # TOKENIZATION
     elif option == "Tokenization":
         st.subheader("Tokenization Output")
 
@@ -93,7 +120,7 @@ if st.button("Process Text"):
             st.markdown("### Character Tokenization")
             st.write(list(text))
 
-    # TEXT CLEANING (REGEX) 
+    # TEXT CLEANING
     elif option == "Text Cleaning":
         st.subheader("Regex-Based Text Cleaning")
 
@@ -128,13 +155,13 @@ if st.button("Process Text"):
     elif option == "Lemmatization":
         st.subheader("Lemmatization using SpaCy")
 
-        doc = nlp(text) 
+        doc = nlp(text)
         data = [(token.text, token.pos_, token.lemma_) for token in doc]
 
         df = pd.DataFrame(data, columns=["Word", "POS", "Lemma"])
         st.dataframe(df, use_container_width=True)
 
-    # BAG OF WORDS (REGEX)-
+    # BAG OF WORDS
     elif option == "Bag of Words":
         st.subheader("Bag of Words (Regex-Based)")
 
@@ -154,11 +181,11 @@ if st.button("Process Text"):
         df_top = df.head(10)
         fig, ax = plt.subplots()
         ax.bar(df_top["Word"], df_top["Frequency"])
-        ax.set_title("BoW - Top 10 Words") 
+        ax.set_title("BoW - Top 10 Words")
         plt.xticks(rotation=45)
         st.pyplot(fig)
 
-    # TF-IDF (REGEX) 
+    # TF-IDF
     elif option == "TF-IDF":
         st.subheader("TF-IDF (Regex-Based)")
 
@@ -182,7 +209,7 @@ if st.button("Process Text"):
         plt.xticks(rotation=45)
         st.pyplot(fig)
 
-    # WORD2VEC (REGEX)
+    # WORD2VEC
     elif option == "Word Embeddings (Word2Vec)":
         st.subheader("Word Embeddings using Word2Vec (Regex-Based)")
 
@@ -191,13 +218,18 @@ if st.button("Process Text"):
         if len(tokens) < 2:
             st.warning("Please enter more meaningful text.")
         else:
-            model = Word2Vec(
-                sentences=[tokens],
-                vector_size=100,
-                window=5,
-                min_count=1,
-                workers=4
-            )
+
+            @st.cache_resource
+            def train_word2vec(tokens):
+                return Word2Vec(
+                    sentences=[tokens],
+                    vector_size=100,
+                    window=5,
+                    min_count=1,
+                    workers=1
+                )
+
+            model = train_word2vec(tokens)
 
             words = list(model.wv.index_to_key)
             vectors = np.array([model.wv[word] for word in words])

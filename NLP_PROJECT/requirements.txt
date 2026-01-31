@@ -6,3 +6,6 @@ scikit-learn
 nltk
 spacy
 gensim
+spacy==3.8.0
+en-core-web-sm==3.8.0
+
